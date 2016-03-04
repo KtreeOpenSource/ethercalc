@@ -137,7 +137,6 @@ SocialCalc.TableEditor = function(context) {
    this.busy = false; // true when executing command, calculating, etc.
    this.ensureecell = false; // if true, ensure ecell is visible after timeout
    this.deferredCommands = []; // commands to execute after busy, in form: {cmdstr: "cmds", saveundo: t/f}
-   this.deferredEmailCommands = []; // Email commands to execute after busy, in form: {cmdstr: "cmds", saveundo: t/f}
 
    this.gridposition = null; // screen coords of full grid
    this.headposition = null; // screen coords of upper left of grid within header rows
@@ -444,18 +443,6 @@ SocialCalc.TableEditor.prototype.ScrollTableDownOneRow = function() {return Soci
 SocialCalc.TableEditor.prototype.ScrollTableLeftOneCol = function() {return SocialCalc.ScrollTableLeftOneCol(this);};
 SocialCalc.TableEditor.prototype.ScrollTableRightOneCol = function() {return SocialCalc.ScrollTableRightOneCol(this);};
 
-SocialCalc.TableEditor.prototype.StopPropagation = function() {
-    return SocialCalc.StopPropagation(this);
-};
-
-SocialCalc.TableEditor.prototype.SetMouseMoveUp = function() {
-    return SocialCalc.SetMouseMoveUp(this);
-};
-
-SocialCalc.TableEditor.prototype.RemoveMouseMoveUp = function() {
-    return SocialCalc.RemoveMouseMoveUp(this);
-};
-
 // Functions:
 
 SocialCalc.CreateTableEditor = function(editor, width, height) {
@@ -521,7 +508,7 @@ SocialCalc.CreateTableEditor = function(editor, width, height) {
 
    td = document.createElement("td"); // logo display: Required by CPAL License for this code!
    td.style.background="url("+editor.imageprefix+"logo.gif) no-repeat center center";
-   td.innerHTML = "<div style='cursor:pointer;font-size:1px;'><img src='"+editor.imageprefix+"1x1.gif' border='0' width='18' height='18'></div>";
+   td.innerHTML = "<div style='cursor:pointer;font-size:100px;'><img src='"+editor.imageprefix+"1x1.gif' border='0' width='18' height='18'></div>";
    tr.appendChild(td);
    editor.logo = td;
    AssignID(editor, editor.logo, "logo");
@@ -753,11 +740,9 @@ SocialCalc.EditorRenderSheet = function(editor) {
    if (editor.ecell) editor.SetECellHeaders("selected");
 
    SocialCalc.AssignID(editor, editor.fullgrid, "fullgrid"); // give it an id
-   // eddy EditorRenderSheet {
-   if(!SocialCalc._app) editor.fullgrid.className = "te_download";
+
    editor.EditorMouseRegister();
-   // } EditorRenderSheet
-   
+
    }
 
 //
@@ -775,11 +760,7 @@ SocialCalc.EditorScheduleSheetCommands = function(editor, cmdstr, saveundo, igno
       return;
       }
 
-   // eddy ExecuteSheetCommand {
-   var cmdTokens = cmdstr.split(" ");
-
-   switch (cmdTokens[0]) {
-	   // } eddy ExecuteSheetCommand 
+   switch (cmdstr) {
       case "recalc":
       case "redisplay":
          editor.context.sheetobj.ScheduleSheetCommands(cmdstr, false);
@@ -792,12 +773,7 @@ SocialCalc.EditorScheduleSheetCommands = function(editor, cmdstr, saveundo, igno
       case "redo":
          editor.SheetRedo();
          break;
-         
-      case "setemailparameters":    	  
-		  SocialCalc.TriggerIoAction.Email(cmdTokens[1], cmdTokens[2]);
-    	  break;
-         
-         
+
       default:
          editor.context.sheetobj.ScheduleSheetCommands(cmdstr, saveundo);
          break;
@@ -851,11 +827,13 @@ SocialCalc.EditorSheetStatusCallback = function(recalcdata, status, arg, editor)
             cell = SocialCalc.GetEditorCellElement(editor, cr.row, cr.col);
             editor.ReplaceCell(cell, cr.row, cr.col);
             }
+
          if (editor.deferredCommands.length) {
             dcmd = editor.deferredCommands.shift();
             editor.EditorScheduleSheetCommands(dcmd.cmdstr, dcmd.saveundo, true);
             return;
             }
+
          if (sheetobj.attribs.needsrecalc &&
                (sheetobj.attribs.recalc!="off" || sheetobj.recalconce)
                && editor.recalcFunction) {
@@ -929,14 +907,6 @@ SocialCalc.EditorSheetStatusCallback = function(recalcdata, status, arg, editor)
          break;
 
       case "doneposcalc":
-          if (editor.deferredEmailCommands.length) {
-              signalstatus(status);
-              var emailcmd = editor.deferredEmailCommands.shift();
-              editor.EditorScheduleSheetCommands(emailcmd.cmdstr, emailcmd.saveundo, true);
-              return;
-              }
-    	  
-    	  
          if (editor.deferredCommands.length) {
             signalstatus(status);
             dcmd = editor.deferredCommands.shift();
@@ -948,14 +918,9 @@ SocialCalc.EditorSheetStatusCallback = function(recalcdata, status, arg, editor)
             if (editor.state=="start") editor.DisplayCellContents(); // make sure up to date
             }
          return;
-      // eddy EditorSheetStatusCallback {
-      case "emailing":
-      case "confirmemailsent":
-        break;
-      // } EditorSheetStatusCallback eddy 
-         
+
       default:
-    	 alert("Unknown status: "+status);
+addmsg("Unknown status: "+status);
          break;
 
       }
@@ -1012,16 +977,7 @@ SocialCalc.EditorGetStatuslineString = function(editor, status, arg, params) {
       case "doneposcalc":
          document.body.style.cursor = "default";
          editor.griddiv.style.cursor = "default";
-         // eddy EditorGetStatuslineString {
-         // all updates done, So let future event clear the "sent" message in the status bar
-         if(params.emailing == "sent") {
-        	 progress = params.emailreponse;
-        	 params.emailreponse = "";
-        	 params.emailing = "done";
-         }
-         // } eddy EditorGetStatuslineString 
          break;
-         
       case "calcorder":
          progress = scc.s_statusline_ordering+Math.floor(100*arg.count/(arg.total||1))+"%";
          break;
@@ -1045,33 +1001,11 @@ SocialCalc.EditorGetStatuslineString = function(editor, status, arg, params) {
       case "calcfinished":
          params.calculating = false;
          break;
-      // eddy EditorGetStatuslineString {
-      case "emailing":
-    	 params.emailing = "sending";
-    	 params.emailreponse ="";
-         break;
-      case "confirmemailsent":
-     	 params.emailing = "sent";
-     	 if(typeof params.emailreponse === 'undefined') params.emailreponse ="";
-     	 params.emailreponse += arg;
-         break;    	  
-      // } eddy EditorGetStatuslineString 
-         
       default:
          progress = status;
          break;
       }
 
-   // eddy EditorGetStatuslineString {
-   // if send email then update status bar with "sending" and then "sent"
-   if(params.emailing == "sending") {
-  	 progress += scc.s_statusline_sendemail;
-   }
-   if(params.emailing == "sent") {
-  	 progress += params.emailreponse;
-   }   
-   // } eddy EditorGetStatuslineString 
-   
    if (!progress && params.calculating) {
       progress = scc.s_statusline_calculating;
       }
@@ -1108,9 +1042,7 @@ SocialCalc.EditorGetStatuslineString = function(editor, status, arg, params) {
       circ = circ.replace(/\|/, " referenced by ");
       sstr += ' &nbsp; '+scc.s_statusline_circref + circ + '</span>';
       }
-   // eddy EditorGetStatuslineString {
-   sstr += "";
-   // } eddy EditorGetStatuslineString 
+
    return sstr;
 
    }
@@ -1218,136 +1150,116 @@ SocialCalc.EditorMouseUnregister = function(editor) {
 
    }
 
-SocialCalc.StopPropagation = function(event) {
-    if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
-    else event.cancelBubble = true; // IE 5+
-    if (event.preventDefault) event.preventDefault(); // DOM Level 2
-    else event.returnValue = false; // IE 5+
-}
-
-SocialCalc.SetMouseMoveUp = function(move, up, element, event) {
-       // Event code from JavaScript, Flanagan, 5th Edition, pg. 422
-   if (document.addEventListener) { // DOM Level 2 -- Firefox, et al
-      document.addEventListener("mousemove", move, true); // capture everywhere
-      document.addEventListener("mouseup", up, true); // capture everywhere
-      }
-   else if (element.attachEvent) { // IE 5+
-      element.setCapture();
-      element.attachEvent("onmousemove", move);
-      element.attachEvent("onmouseup", up);
-      element.attachEvent("onlosecapture", up);
-   }
-    SocialCalc.StopPropagation(event);
-}
-
-SocialCalc.RemoveMouseMoveUp = function(move, up, element, event) {
-    SocialCalc.StopPropagation(event);
-    if (document.removeEventListener) { // DOM Level 2
-	document.removeEventListener("mousemove", move, true);
-	document.removeEventListener("mouseup", up, true);
-    }
-    else if (element.detachEvent) { // IE
-	element.detachEvent("onlosecapture", up);
-	element.detachEvent("onmouseup", up);
-	element.detachEvent("onmousemove", move);
-	element.releaseCapture();
-    }
-}
-
 SocialCalc.ProcessEditorMouseDown = function(e) {
+	 if(!$(e.target).is('.searchbarinput') && !$(e.target).is('th')){
+		 
+			var editor, result, coord, textarea, wval, range;
 
-   var editor, result, coord, textarea, wval, range;
+			var event = e || window.event;
 
-   var event = e || window.event;
+			var mouseinfo = SocialCalc.EditorMouseInfo;
+			var ele = event.target || event.srcElement; // source object is often within what we want
+			var mobj;
 
-   var mouseinfo = SocialCalc.EditorMouseInfo;
-   var ele = event.target || event.srcElement; // source object is often within what we want
-   var mobj;
+			if (mouseinfo.ignore) return; // ignore this
 
-   if (mouseinfo.ignore) return; // ignore this
+			for (mobj=null; !mobj && ele; ele=ele.parentNode) { // go up tree looking for one of our elements
+			  mobj = SocialCalc.LookupElement(ele, mouseinfo.registeredElements);
+			  }
+			if (!mobj) {
+			  mouseinfo.editor = null;
+			  return; // not one of our elements
+			}
 
-   for (mobj=null; !mobj && ele; ele=ele.parentNode) { // go up tree looking for one of our elements
-      mobj = SocialCalc.LookupElement(ele, mouseinfo.registeredElements);
-      }
-   if (!mobj) {
-      mouseinfo.editor = null;
-      return; // not one of our elements
-      }
+			editor = mobj.editor;
+			mouseinfo.element = ele;
+			range = editor.range;
 
-   editor = mobj.editor;
-   mouseinfo.element = ele;
-   range = editor.range;
+			var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
+			var clientX = event.clientX - pos.left;
+			var clientY = event.clientY - pos.top;
+			
+			/*
+			 * Added for filter functionality
+			 * */
+			     ta = SocialCalc.GetSpreadsheetControlObject();
+             if($(e.target).is('td'))
+				{
+					rownumerVal=parseInt(($(e.target).attr("id")).match(/\d+/)[0], 10);           
+					coordinates=$(e.target).attr("id");
+					coordinates= coordinates.replace("cell_","")   ;
+				}
+				else if($(e.target).is('p'))
+				{
+						rownumerVal=parseInt(($(e.target).parents('td').attr("id")).match(/\d+/)[0], 10);      
+						coordinates= $(e.target).parents('td').attr("id");					     
+						coordinates= coordinates.replace("cell_","");
+				}
+			 /*
+			  * 
+			  * */
+			result = SocialCalc.GridMousePosition(editor, clientX, clientY);
+			if (!result) return; // not on a cell or col header
+			mouseinfo.editor = editor; // remember for later
+			act_coord=result.coord
+			if(coordinates){
+				result.coord=coordinates;
+			}
+			if(rownumerVal)
+				result.row=rownumerVal;
+			if (result.rowheader) {
+				SocialCalc.ProcessEditorRowsizeMouseDown(e, ele, result);
+				return;
+			}
+		   if (result.colheader) {
+				SocialCalc.ProcessEditorColsizeMouseDown(e, ele, result);
+				return;
+			}
+		   if (!result.coord) return; // not us
+		   if (!range.hasrange) {
+			  if (e.shiftKey)
+				 editor.RangeAnchor();
+			  }
+		   coord = editor.MoveECell(act_coord);
 
-   var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
-   var clientX = event.clientX - pos.left;
-   var clientY = event.clientY - pos.top;
-   result = SocialCalc.GridMousePosition(editor, clientX, clientY);
+		   if (range.hasrange) {
+			  if (e.shiftKey)
+				 editor.RangeExtend();
+			  else
+				 editor.RangeRemove();
+			  }
 
-   if (!result) return; // not on a cell or col header
-   mouseinfo.editor = editor; // remember for later
+		   mouseinfo.mousedowncoord = coord; // remember if starting drag range select
+		   mouseinfo.mouselastcoord = coord;
 
-    if (result.rowheader) {
-	if (result.rowselect)  {
-	    SocialCalc.ProcessEditorRowselectMouseDown(e, ele, result);
-	} else {
-	    SocialCalc.ProcessEditorRowsizeMouseDown(e, ele, result);
-	}
-	return;
-    }
+		   editor.EditorMouseRange(coord);
+		   SocialCalc.KeyboardSetFocus(editor);
+		   //Added for filters functionality
+		   editor.customecell=result;
+		   editor.ecell.coord=coordinates
+		   
+		   if (editor.state!="start" && editor.inputBox) editor.inputBox.element.focus();
 
-    if (result.colheader) {
-	if (result.colselect)  {
-	    SocialCalc.ProcessEditorColselectMouseDown(e, ele, result);
-	} else {
-	    SocialCalc.ProcessEditorColsizeMouseDown(e, ele, result);
-	}
-	return;
-    }
+		   // Event code from JavaScript, Flanagan, 5th Edition, pg. 422
+		   if (document.addEventListener) { // DOM Level 2 -- Firefox, et al
+			  document.addEventListener("mousemove", SocialCalc.ProcessEditorMouseMove, true); // capture everywhere
+			  document.addEventListener("mouseup", SocialCalc.ProcessEditorMouseUp, true); // capture everywhere
+			  }
+		   else if (ele.attachEvent) { // IE 5+
+			  ele.setCapture();
+			  ele.attachEvent("onmousemove", SocialCalc.ProcessEditorMouseMove);
+			  ele.attachEvent("onmouseup", SocialCalc.ProcessEditorMouseUp);
+			  ele.attachEvent("onlosecapture", SocialCalc.ProcessEditorMouseUp);
+			  }
+		   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+		   else event.cancelBubble = true; // IE 5+
+		   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+		   else event.returnValue = false; // IE 5+
 
-   if (!result.coord) return; // not us
-
-   if (!range.hasrange) {
-      if (e.shiftKey)
-         editor.RangeAnchor();
-      }
-   coord = editor.MoveECell(result.coord);
-   // eddy ProcessEditorMouseDown {
-   if(SocialCalc._app == true) { // "app" wigets need to keep focus - needed because "coord" always equals A1 
-     SocialCalc.CmdGotFocus(true); // cell widgets need to keep focus
-     return;
-   }
-   
-   var clickedCell = editor.context.sheetobj.cells[coord];
-   if(clickedCell) {
-     if(clickedCell.valuetype.charAt(1) == 'i') { // IF cell contains ioWidget
-        var formula_name= clickedCell.valuetype.substring(2);	 
-	    var cell_widget=document.getElementById(formula_name+'_'+coord);
-		SocialCalc.CmdGotFocus(cell_widget); // cell widgets need to keep focus 
-		// SocialCalc.Keyboard.FocusWidget = coord;
-		return; // let ioWidget keep the focus 
-		}
+		   return;
+		 
 	 }
-   // }
-
-   if (range.hasrange) {
-      if (e.shiftKey)
-         editor.RangeExtend();
-      else
-         editor.RangeRemove();
-      }
-
-   mouseinfo.mousedowncoord = coord; // remember if starting drag range select
-   mouseinfo.mouselastcoord = coord;
-
-   editor.EditorMouseRange(coord);
-
-   SocialCalc.KeyboardSetFocus(editor);
-   if (editor.state!="start" && editor.inputBox) editor.inputBox.element.focus();
-    SocialCalc.SetMouseMoveUp(SocialCalc.ProcessEditorMouseMove,
-			      SocialCalc.ProcessEditorMouseUp,
-			      ele,
-			      event);
-   return;
+   
 
    }
 
@@ -1435,8 +1347,14 @@ SocialCalc.ProcessEditorMouseMove = function(e) {
    mouseinfo.mouselastcoord = result.coord;
 
    editor.EditorMouseRange(result.coord);
-   SocialCalc.StopPropagation(event); 
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
+
    }
 
 
@@ -1474,11 +1392,25 @@ SocialCalc.ProcessEditorMouseUp = function(e) {
       }
 
    editor.EditorMouseRange(result.coord);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
+   if (document.removeEventListener) { // DOM Level 2
+      document.removeEventListener("mousemove", SocialCalc.ProcessEditorMouseMove, true);
+      document.removeEventListener("mouseup", SocialCalc.ProcessEditorMouseUp, true);
+      }
+   else if (element.detachEvent) { // IE
+      element.detachEvent("onlosecapture", SocialCalc.ProcessEditorMouseUp);
+      element.detachEvent("onmouseup", SocialCalc.ProcessEditorMouseUp);
+      element.detachEvent("onmousemove", SocialCalc.ProcessEditorMouseMove);
+      element.releaseCapture();
+      }
+
    mouseinfo.editor = null;
-   SocialCalc.RemoveMouseMoveUp(SocialCalc.ProcessEditorMouseMove,
-				  SocialCalc.ProcessEditorMouseUp,
-				  element,
-				  event);
+
    return false;
 
    }
@@ -1514,10 +1446,23 @@ SocialCalc.ProcessEditorColsizeMouseDown = function(e, ele, result) {
 
       editor.toplevel.appendChild(sizedisplay);
       }
-    SocialCalc.SetMouseMoveUp( SocialCalc.ProcessEditorColsizeMouseMove,
-			       SocialCalc.ProcessEditorColsizeMouseUp,
-			       editor.toplevel,
-			       event);
+
+   // Event code from JavaScript, Flanagan, 5th Edition, pg. 422
+   if (document.addEventListener) { // DOM Level 2 -- Firefox, et al
+      document.addEventListener("mousemove", SocialCalc.ProcessEditorColsizeMouseMove, true); // capture everywhere
+      document.addEventListener("mouseup", SocialCalc.ProcessEditorColsizeMouseUp, true); // capture everywhere
+      }
+   else if (editor.toplevel.attachEvent) { // IE 5+
+      editor.toplevel.setCapture();
+      editor.toplevel.attachEvent("onmousemove", SocialCalc.ProcessEditorColsizeMouseMove);
+      editor.toplevel.attachEvent("onmouseup", SocialCalc.ProcessEditorColsizeMouseUp);
+      editor.toplevel.attachEvent("onlosecapture", SocialCalc.ProcessEditorColsizeMouseUp);
+      }
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
    }
 
@@ -1545,8 +1490,14 @@ SocialCalc.ProcessEditorColsizeMouseMove = function(e) {
           newsize + '</div></td></tr></table>';
       SocialCalc.setStyles(sizedisplay.firstChild.lastChild.firstChild.childNodes[0], "filter:alpha(opacity=85);opacity:.85;"); // so no warning msg with Firefox about filter
       }
-   SocialCalc.StopPropagation(event);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
+
    }
 
 
@@ -1559,11 +1510,22 @@ SocialCalc.ProcessEditorColsizeMouseUp = function(e) {
    element = mouseinfo.element;
    var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
    var clientX = event.clientX - pos.left;
-   SocialCalc.RemoveMouseMoveUp(
-       SocialCalc.ProcessEditorColsizeMouseMove,
-       SocialCalc.ProcessEditorColsizeMouseUp, 
-       editor.toplevel,
-       event);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
+   if (document.removeEventListener) { // DOM Level 2
+      document.removeEventListener("mousemove", SocialCalc.ProcessEditorColsizeMouseMove, true);
+      document.removeEventListener("mouseup", SocialCalc.ProcessEditorColsizeMouseUp, true);
+      }
+   else if (editor.toplevel.detachEvent) { // IE
+      editor.toplevel.detachEvent("onlosecapture", SocialCalc.ProcessEditorColsizeMouseUp);
+      editor.toplevel.detachEvent("onmouseup", SocialCalc.ProcessEditorColsizeMouseUp);
+      editor.toplevel.detachEvent("onmousemove", SocialCalc.ProcessEditorColsizeMouseMove);
+      editor.toplevel.releaseCapture();
+      }
 
    if (mouseinfo.mousecoltounhide) {
       editor.EditorScheduleSheetCommands("set "+SocialCalc.rcColname(mouseinfo.mousecoltounhide)+" hide", true, false);
@@ -1606,112 +1568,31 @@ SocialCalc.FinishColRowSize = function() {
 
    }
 
-
-SocialCalc.ProcessEditorRowselectMouseDown = function(e, ele, result) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    var sheet = SocialCalc.GetSpreadsheetControlObject().sheet;
-    coord1 = SocialCalc.crToCoord(1, result.row)
-    coord2 = SocialCalc.crToCoord(sheet.LastCol(),
-				  result.row)
-    coord3 = SocialCalc.crToCoord(editor.firstscrollingcol,
-				  result.row)
-    editor.RangeAnchor(coord1);
-    editor.RangeExtend(coord2);
-    editor.MoveECell(coord3);
-    SocialCalc.SetMouseMoveUp(SocialCalc.ProcessEditorRowselectMouseMove,
-			      SocialCalc.ProcessEditorRowselectMouseUp,
-			      editor.toplevel,
-			      event);
+SocialCalc.ProcessEditorRowselectMouseDown = function(editor, result) {
+    if (result.rowselect) {
+	coord1 = SocialCalc.crToCoord(1, result.row)
+	coord2 = SocialCalc.crToCoord(editor.colpositions.length,
+				      result.row)
+	coord3 = SocialCalc.crToCoord(editor.firstscrollingcol,
+				      result.row)
+	editor.RangeAnchor(coord1);
+	editor.RangeExtend(coord2);
+	editor.MoveECell(coord3);
+    }
 }
 
-SocialCalc.ProcessEditorRowselectMouseMove = function(e) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    var sheet = SocialCalc.GetSpreadsheetControlObject().sheet;
+SocialCalc.ProcessEditorColselectMouseDown = function(editor, result) {
+    if (result.colselect) {
+	coord1 = SocialCalc.crToCoord(result.col, 1)
+	coord2 = SocialCalc.crToCoord(result.col,
+				      editor.rowpositions.length)
+	coord3 = SocialCalc.crToCoord(result.col,
+				      editor.firstscrollingrow)
 
-    if (!editor) return; // not us, ignore
-
-    var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
-    var clientX = event.clientX - pos.left;
-    var clientY = event.clientY - pos.top;
-    result = SocialCalc.GridMousePosition(editor, clientX, clientY);
-    coord2 = SocialCalc.crToCoord(sheet.LastCol(),
-				  result.row)
-    coord3 = SocialCalc.crToCoord(editor.firstscrollingcol,
-				  result.row)
-    editor.RangeExtend(coord2);
-    editor.MoveECell(coord3);
-    return;
-}
-
-SocialCalc.ProcessEditorRowselectMouseUp = function(e) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    if (!editor) return; // not us, ignore
-    SocialCalc.RemoveMouseMoveUp(SocialCalc.ProcessEditorRowselectMouseMove,
-				 SocialCalc.ProcessEditorRowselectMouseUp,
-				 editor.toplevel,
-				 e);
-    return;
-}
-
-SocialCalc.ProcessEditorColselectMouseDown = function(e, ele, result) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    var sheet = SocialCalc.GetSpreadsheetControlObject().sheet;
-
-    coord1 = SocialCalc.crToCoord(result.col, 1)
-    coord2 = SocialCalc.crToCoord(result.col,
-				  sheet.LastRow())
-    coord3 = SocialCalc.crToCoord(result.col,
-				  editor.firstscrollingrow)
-    
-    editor.RangeAnchor(coord1);
-    editor.RangeExtend(coord2);
-    editor.MoveECell(coord3);
-    SocialCalc.SetMouseMoveUp(SocialCalc.ProcessEditorColselectMouseMove,
-			      SocialCalc.ProcessEditorColselectMouseUp,
-			      editor.toplevel,
-			      event);
-
-}
-
-SocialCalc.ProcessEditorColselectMouseMove = function(e) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    var sheet = SocialCalc.GetSpreadsheetControlObject().sheet;
-
-    if (!editor) return; // not us, ignore
-
-    var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
-    var clientX = event.clientX - pos.left;
-    var clientY = event.clientY - pos.top;
-    result = SocialCalc.GridMousePosition(editor, clientX, clientY);
-    coord2 = SocialCalc.crToCoord(result.col,
-				  sheet.LastRow())
-    coord3 = SocialCalc.crToCoord(result.col,
-				  editor.firstscrollingrow)
-    editor.RangeExtend(coord2);
-    editor.MoveECell(coord3);
-    return;
-}
-
-SocialCalc.ProcessEditorColselectMouseUp = function(e) {
-    var event = e || window.event;
-    var mouseinfo = SocialCalc.EditorMouseInfo;
-    var editor = mouseinfo.editor;
-    if (!editor) return; // not us, ignore
-    SocialCalc.RemoveMouseMoveUp(SocialCalc.ProcessEditorColselectMouseMove,
-				 SocialCalc.ProcessEditorColselectMouseUp,
-				 editor.toplevel,
-				 e);
-    return;
+	editor.RangeAnchor(coord1);
+	editor.RangeExtend(coord2);
+	editor.MoveECell(coord3);
+    }
 }
 
 SocialCalc.ProcessEditorRowsizeMouseDown = function(e, ele, result) {
@@ -1745,11 +1626,24 @@ SocialCalc.ProcessEditorRowsizeMouseDown = function(e, ele, result) {
 
     editor.toplevel.appendChild(sizedisplay);
   }
-    SocialCalc.SetMouseMoveUp(SocialCalc.ProcessEditorRowsizeMouseMove,
-			      SocialCalc.ProcessEditorRowsizeMouseUp,
-			      editor.toplevel,
-			      event);
-    return;
+
+   // Event code from JavaScript, Flanagan, 5th Edition, pg. 422
+   if (document.addEventListener) { // DOM Level 2 -- Firefox, et al
+      document.addEventListener("mousemove", SocialCalc.ProcessEditorRowsizeMouseMove, true); // capture everywhere
+      document.addEventListener("mouseup", SocialCalc.ProcessEditorRowsizeMouseUp, true); // capture everywhere
+      }
+   else if (editor.toplevel.attachEvent) { // IE 5+
+      editor.toplevel.setCapture();
+      editor.toplevel.attachEvent("onmousemove", SocialCalc.ProcessEditorRowsizeMouseMove);
+      editor.toplevel.attachEvent("onmouseup", SocialCalc.ProcessEditorRowsizeMouseUp);
+      editor.toplevel.attachEvent("onlosecapture", SocialCalc.ProcessEditorRowsizeMouseUp);
+      }
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
+   return;
    }
 
 
@@ -1775,7 +1669,11 @@ SocialCalc.ProcessEditorRowsizeMouseMove = function(e) {
     SocialCalc.setStyles(sizedisplay.firstChild.lastChild.firstChild.childNodes[0], "filter:alpha(opacity=85);opacity:.5;"); // so no warning msg with Firefox about filter
   }
 
-   SocialCalc.StopPropagation(event);
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
 
    }
@@ -1790,11 +1688,23 @@ SocialCalc.ProcessEditorRowsizeMouseUp = function(e) {
    element = mouseinfo.element;
    var pos = SocialCalc.GetSpreadsheetControlObject().spreadsheetDiv.firstChild.offsetHeight;
    var clientY = event.clientY - pos;
-   SocialCalc.RemoveMouseMoveUp(
-       SocialCalc.ProcessEditorRowsizeMouseMove,
-       SocialCalc.ProcessEditorRowsizeMouseUp,
-       editor.toplevel,
-       event);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
+   if (document.removeEventListener) { // DOM Level 2
+      document.removeEventListener("mousemove", SocialCalc.ProcessEditorRowsizeMouseMove, true);
+      document.removeEventListener("mouseup", SocialCalc.ProcessEditorRowsizeMouseUp, true);
+      }
+   else if (editor.toplevel.detachEvent) { // IE
+      editor.toplevel.detachEvent("onlosecapture", SocialCalc.ProcessEditorRowsizeMouseUp);
+      editor.toplevel.detachEvent("onmouseup", SocialCalc.ProcessEditorRowsizeMouseUp);
+      editor.toplevel.detachEvent("onmousemove", SocialCalc.ProcessEditorRowsizeMouseMove);
+      editor.toplevel.releaseCapture();
+      }
+
    if (mouseinfo.mouserowtounhide) {
       editor.EditorScheduleSheetCommands("set "+mouseinfo.mouserowtounhide+" hide", true, false);
       }
@@ -1956,53 +1866,61 @@ SocialCalc.DragAutoRepeat = function() {
 //
 
 SocialCalc.ProcessEditorDblClick = function(e) {
+	if(!$(e.target).is('.searchbarinput') && !$(e.target).is('th')){
+		var editor, result, coord, textarea, wval, range;
 
-   var editor, result, coord, textarea, wval, range;
+	   var event = e || window.event;
 
-   var event = e || window.event;
+	   var mouseinfo = SocialCalc.EditorMouseInfo;
+	   var ele = event.target || event.srcElement; // source object is often within what we want
+	   var mobj;
 
-   var mouseinfo = SocialCalc.EditorMouseInfo;
-   var ele = event.target || event.srcElement; // source object is often within what we want
-   var mobj;
+	   if (mouseinfo.ignore) return; // ignore this
 
-   if (mouseinfo.ignore) return; // ignore this
+	   for (mobj=null; !mobj && ele; ele=ele.parentNode) { // go up tree looking for one of our elements
+		  mobj = SocialCalc.LookupElement(ele, mouseinfo.registeredElements);
+		  }
+	   if (!mobj) {
+		  mouseinfo.editor = null;
+		  return; // not one of our elements
+		  }
 
-   for (mobj=null; !mobj && ele; ele=ele.parentNode) { // go up tree looking for one of our elements
-      mobj = SocialCalc.LookupElement(ele, mouseinfo.registeredElements);
-      }
-   if (!mobj) {
-      mouseinfo.editor = null;
-      return; // not one of our elements
-      }
+	   editor = mobj.editor;
 
-   editor = mobj.editor;
+	   var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
+	   var clientX = event.clientX - pos.left;
+	   var clientY = event.clientY - pos.top;
+	   result = SocialCalc.GridMousePosition(editor, clientX, clientY);
+	   if (!result || !result.coord) return; // not within cell area - ignore
 
-   var pos = SocialCalc.GetElementPositionWithScroll(editor.toplevel);
-   var clientX = event.clientX - pos.left;
-   var clientY = event.clientY - pos.top;
-   result = SocialCalc.GridMousePosition(editor, clientX, clientY);
-   if (!result || !result.coord) return; // not within cell area - ignore
+	   mouseinfo.editor = editor; // remember for later
+	   mouseinfo.element = ele;
+	   range = editor.range;
 
-   mouseinfo.editor = editor; // remember for later
-   mouseinfo.element = ele;
-   range = editor.range;
+	   sheetobj = editor.context.sheetobj;
 
-   sheetobj = editor.context.sheetobj;
+	   switch (editor.state) {
+		  case "start":
+			 SocialCalc.EditorOpenCellEdit(editor);
+			 break;
 
-   switch (editor.state) {
-      case "start":
-         SocialCalc.EditorOpenCellEdit(editor);
-         break;
+		  case "input":
+			 break;
 
-      case "input":
-         break;
+		  default:
+			 break;
+		  }
 
-      default:
-         break;
-      }
-   SocialCalc.StopPropagation(event);
-   return;
+	   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+	   else event.cancelBubble = true; // IE 5+
+	   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+	   else event.returnValue = false; // IE 5+
 
+	   return;
+
+
+	}
+   
    }
 
 
@@ -2031,174 +1949,180 @@ SocialCalc.EditorOpenCellEdit = function(editor) {
 
 SocialCalc.EditorProcessKey = function(editor, ch, e) {
 
-   var result, cell, cellobj, valueinfo, fch, coord, inputtext, f;
 
-   var sheetobj = editor.context.sheetobj;
-   var wval = editor.workingvalues;
-   var range = editor.range;
+		if (!$(e.target).is(".searchbarinput") && !$(e.target).is("th")) {
+			  var result, cell, cellobj, valueinfo, fch, coord, inputtext, f;
+			   var sheetobj = editor.context.sheetobj;
+			   var wval = editor.workingvalues;
+			   var range = editor.range;
 
-   if (typeof ch != "string") ch = "";
+			   if (typeof ch != "string") ch = "";
 
-   switch (editor.state) {
-      case "start":
-         if (e.shiftKey && ch.substr(0,2)=="[a") {
-            ch = ch + "shifted";
-            }
-         if (ch=="[enter]") ch = "[adown]";
-         if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
-         if (ch.substr(0,2)=="[a" || ch.substr(0,3)=="[pg" || ch=="[home]") {
-            result = editor.MoveECellWithKey(ch);
-            return !result;
-            }
-         if (ch=="[del]" || ch=="[backspace]") {
-            if (!editor.noEdit && !editor.ECellReadonly()) {
-               editor.EditorApplySetCommandsToRange("empty", "");
-               }
-            break;
-            }
-         if (ch=="[esc]") {
-            if (range.hasrange) {
-               editor.RangeRemove();
-               editor.MoveECell(range.anchorcoord);
-               for (f in editor.StatusCallback) {
-                  editor.StatusCallback[f].func(editor, "specialkey", ch, editor.StatusCallback[f].params);
-                  }
-               }
-            return false;
-            }
+			   switch (editor.state) {
+				  case "start":
+					 if (e.shiftKey && ch.substr(0,2)=="[a") {
+						ch = ch + "shifted";
+						}
+					 if (ch=="[enter]") ch = "[adown]";
+					 if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
+					 if (ch.substr(0,2)=="[a" || ch.substr(0,3)=="[pg" || ch=="[home]") {
+						result = editor.MoveECellWithKey(ch);
+						return !result;
+						}
+					 if (ch=="[del]" || ch=="[backspace]") {
+						if (!editor.noEdit && !editor.ECellReadonly()) {
+						   editor.EditorApplySetCommandsToRange("empty", "");
+						   }
+						break;
+						}
+					 if (ch=="[esc]") {
+						if (range.hasrange) {
+						   editor.RangeRemove();
+						   editor.MoveECell(range.anchorcoord);
+						   for (f in editor.StatusCallback) {
+							  editor.StatusCallback[f].func(editor, "specialkey", ch, editor.StatusCallback[f].params);
+							  }
+						   }
+						return false;
+						}
 
-         if (ch=="[f2]") {
-            if (editor.noEdit || editor.ECellReadonly()) return true;
-            SocialCalc.EditorOpenCellEdit(editor);
-            return false;
-            }
+					 if (ch=="[f2]") {
+						if (editor.noEdit || editor.ECellReadonly()) return true;
+						SocialCalc.EditorOpenCellEdit(editor);
+						return false;
+						}
 
-         if ((ch.length>1 && ch.substr(0,1)=="[") || ch.length==0) { // some control key
-            if (editor.ctrlkeyFunction && ch.length>0) {
-               return editor.ctrlkeyFunction(editor, ch);
-               }
-            else {
-               return true;
-               }
-            }
-         if (!editor.ecell) return true; // no ecell
-         if (!editor.inputBox) return true; // no inputBox so no editing
-         if (editor.ECellReadonly()) return true;
-         editor.inputBox.element.disabled = false; // make sure editable
-         editor.state = "input";
-         editor.inputBox.ShowInputBox(true);
-         editor.inputBox.Focus();
-         editor.inputBox.SetText(ch);
-         editor.inputBox.Select("end");
-         wval.partialexpr = "";
-         wval.ecoord = editor.ecell.coord;
-         wval.erow = editor.ecell.row;
-         wval.ecol = editor.ecell.col;
-         editor.RangeRemove();
-         break;
+					 if ((ch.length>1 && ch.substr(0,1)=="[") || ch.length==0) { // some control key
+						if (editor.ctrlkeyFunction && ch.length>0) {
+						   return editor.ctrlkeyFunction(editor, ch);
+						   }
+						else {
+						   return true;
+						   }
+						}
+					 if (!editor.ecell) return true; // no ecell
+					 if (!editor.inputBox) return true; // no inputBox so no editing
+					 if (editor.ECellReadonly()) return true;
+					 editor.inputBox.element.disabled = false; // make sure editable
+					 editor.state = "input";
+					 editor.inputBox.ShowInputBox(true);
+					 editor.inputBox.Focus();
+					 editor.inputBox.SetText(ch);
+					 editor.inputBox.Select("end");
+					 wval.partialexpr = "";
+					 wval.ecoord = editor.ecell.coord;
+					 wval.erow = editor.ecell.row;
+					 wval.ecol = editor.ecell.col;
+					 editor.RangeRemove();
+					 break;
 
-      case "input":
-         inputtext = editor.inputBox.GetText(); // should not get here if no inputBox
-         if (editor.inputBox.skipOne) return false; // ignore a key already handled
-         if (ch=="[esc]" || ch=="[enter]" || ch=="[tab]" || (ch && ch.substr(0,2)=="[a")) {
-            if (("(+-*/,:!&<>=^".indexOf(inputtext.slice(-1))>=0 && inputtext.slice(0,1)=="=") ||
-                (inputtext == "=")) {
-               wval.partialexpr = inputtext;
-               }
-            if (wval.partialexpr) { // if in pointing operation
-               if (e.shiftKey && ch.substr(0,2)=="[a") {
-                  ch = ch + "shifted";
-                  }
-               coord = editor.MoveECellWithKey(ch);
-               if (coord) {
-                  if (range.hasrange) {
-                     editor.inputBox.SetText(wval.partialexpr + SocialCalc.crToCoord(range.left, range.top) + ":" +
-                        SocialCalc.crToCoord(range.right, range.bottom));
-                     }
-                  else {
-                     editor.inputBox.SetText(wval.partialexpr + coord);
-                     }
-                  return false;
-                  }
-               }
-            editor.inputBox.Blur();
-            editor.inputBox.ShowInputBox(false);
-            editor.state = "start";
-            editor.cellhandles.ShowCellHandles(true);
-            if (ch != "[esc]") {
-               editor.EditorSaveEdit();
-               if (editor.ecell.coord != wval.ecoord) {
-                  editor.MoveECell(wval.ecoord);
-                  }
-               if (ch=="[enter]") ch = "[adown]";
-               if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
-               if (ch.substr(0,2)=="[a") {
-                  editor.MoveECellWithKey(ch);
-                  }
-               }
-            else {
-               editor.inputBox.DisplayCellContents();
-               editor.RangeRemove();
-               editor.MoveECell(wval.ecoord);
-               }
-            break;
-            }
-         if (wval.partialexpr && ch=="[backspace]") {
-            editor.inputBox.SetText(wval.partialexpr);
-            wval.partialexpr = "";
-            editor.RangeRemove();
-            editor.MoveECell(wval.ecoord);
-            editor.inputBox.ShowInputBox(true); // make sure it's moved back if necessary
-            return false;
-            }
-         if (ch=="[f2]") return false;
-         if (range.hasrange) {
-            editor.RangeRemove();
-            }
-         editor.MoveECell(wval.ecoord);
-         if (wval.partialexpr) {
-            editor.inputBox.ShowInputBox(true); // make sure it's moved back if necessary
-            wval.partialexpr = ""; // not pointing
-            }
-         return true;
+				  case "input":
+					 inputtext = editor.inputBox.GetText(); // should not get here if no inputBox
+					 if (editor.inputBox.skipOne) return false; // ignore a key already handled
+					 if (ch=="[esc]" || ch=="[enter]" || ch=="[tab]" || (ch && ch.substr(0,2)=="[a")) {
+						if (("(+-*/,:!&<>=^".indexOf(inputtext.slice(-1))>=0 && inputtext.slice(0,1)=="=") ||
+							(inputtext == "=")) {
+						   wval.partialexpr = inputtext;
+						   }
+						if (wval.partialexpr) { // if in pointing operation
+						   if (e.shiftKey && ch.substr(0,2)=="[a") {
+							  ch = ch + "shifted";
+							  }
+						   coord = editor.MoveECellWithKey(ch);
+						   if (coord) {
+							  if (range.hasrange) {
+								 editor.inputBox.SetText(wval.partialexpr + SocialCalc.crToCoord(range.left, range.top) + ":" +
+									SocialCalc.crToCoord(range.right, range.bottom));
+								 }
+							  else {
+								 editor.inputBox.SetText(wval.partialexpr + coord);
+								 }
+							  return false;
+							  }
+						   }
+						editor.inputBox.Blur();
+						editor.inputBox.ShowInputBox(false);
+						editor.state = "start";
+						editor.cellhandles.ShowCellHandles(true);
+						if (ch != "[esc]") {
+						   editor.EditorSaveEdit();
+						   if (editor.ecell.coord != wval.ecoord) {
+							  editor.MoveECell(wval.ecoord);
+							  }
+						   if (ch=="[enter]") ch = "[adown]";
+						   if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
+						   if (ch.substr(0,2)=="[a") {
+							  editor.MoveECellWithKey(ch);
+							  }
+						   }
+						else {
+						   editor.inputBox.DisplayCellContents();
+						   editor.RangeRemove();
+						   editor.MoveECell(wval.ecoord);
+						   }
+						break;
+						}
+					 if (wval.partialexpr && ch=="[backspace]") {
+						editor.inputBox.SetText(wval.partialexpr);
+						wval.partialexpr = "";
+						editor.RangeRemove();
+						editor.MoveECell(wval.ecoord);
+						editor.inputBox.ShowInputBox(true); // make sure it's moved back if necessary
+						return false;
+						}
+					 if (ch=="[f2]") return false;
+					 if (range.hasrange) {
+						editor.RangeRemove();
+						}
+					 editor.MoveECell(wval.ecoord);
+					 if (wval.partialexpr) {
+						editor.inputBox.ShowInputBox(true); // make sure it's moved back if necessary
+						wval.partialexpr = ""; // not pointing
+						}
+					 return true;
 
-      case "inputboxdirect":
-         inputtext = editor.inputBox.GetText(); // should not get here if no inputBox
-         if (ch=="[esc]" || ch=="[enter]" || ch=="[tab]") {
-            editor.inputBox.Blur();
-            editor.inputBox.ShowInputBox(false);
-            editor.state = "start";
-            editor.cellhandles.ShowCellHandles(true);
-            if (ch == "[esc]") {
-               editor.inputBox.DisplayCellContents();
-               }
-            else {
-               editor.EditorSaveEdit();
-               if (editor.ecell.coord != wval.ecoord) {
-                  editor.MoveECell(wval.ecoord);
-                  }
-               if (ch=="[enter]") ch = "[adown]";
-               if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
-               if (ch.substr(0,2)=="[a") {
-                  editor.MoveECellWithKey(ch);
-                  }
-               }
-            break;
-            }
-         if (ch=="[f2]") return false;
-         return true;
+				  case "inputboxdirect":
+					 inputtext = editor.inputBox.GetText(); // should not get here if no inputBox
+					 if (ch=="[esc]" || ch=="[enter]" || ch=="[tab]") {
+						editor.inputBox.Blur();
+						editor.inputBox.ShowInputBox(false);
+						editor.state = "start";
+						editor.cellhandles.ShowCellHandles(true);
+						if (ch == "[esc]") {
+						   editor.inputBox.DisplayCellContents();
+						   }
+						else {
+						   editor.EditorSaveEdit();
+						   if (editor.ecell.coord != wval.ecoord) {
+							  editor.MoveECell(wval.ecoord);
+							  }
+						   if (ch=="[enter]") ch = "[adown]";
+						   if (ch=="[tab]") ch = e.shiftKey ? "[aleft]" : "[aright]";
+						   if (ch.substr(0,2)=="[a") {
+							  editor.MoveECellWithKey(ch);
+							  }
+						   }
+						break;
+						}
+					 if (ch=="[f2]") return false;
+					 return true;
 
-      case "skip-and-start":
-         editor.state = "start";
-         editor.cellhandles.ShowCellHandles(true);
-         return false;
+				  case "skip-and-start":
+					 editor.state = "start";
+					 editor.cellhandles.ShowCellHandles(true);
+					 return false;
 
-      default:
-         return true;
-      }
+				  default:
+					 return true;
+				  }
 
-   return false;
+			   return false;
 
+			
+		}
+		else
+			return true;
+ 
    }
 
 SocialCalc.EditorAddToInput = function(editor, str, prefix) {
@@ -2250,10 +2174,13 @@ SocialCalc.EditorDisplayCellContents = function(editor) {
 SocialCalc.EditorSaveEdit = function(editor, text) {
 
    var result, cell, valueinfo, fch, type, value, oldvalue, cmdline;
-
+   
    var sheetobj = editor.context.sheetobj;
    var wval = editor.workingvalues;
 
+	var ecoord= wval.ecoord ;
+	
+	
    type = "text t";
    value = typeof text == "string" ? text : editor.inputBox.GetText(); // either explicit or from input box
 
@@ -2297,50 +2224,27 @@ SocialCalc.EditorSaveEdit = function(editor, text) {
       value = SocialCalc.encodeForSave(value); // newlines, :, and \ are escaped
       }
 
-   cmdline = "set "+wval.ecoord+" "+type+" "+value;
-   editor.EditorScheduleSheetCommands(cmdline, true, false);
-   // eddy EditorSaveEdit {
-   if(typeof sheetobj.ioEventTree === 'undefined') return;	
-   if(typeof sheetobj.ioParameterList === 'undefined') return;
-   if(typeof sheetobj.ioEventTree[wval.ecoord] !== 'undefined') {
-	   SocialCalc.EditedTriggerCell(sheetobj.ioEventTree[wval.ecoord], wval.ecoord, editor, sheetobj);   		
-   }
-   		
-   // }
+   //cmdline = "set "+wval.ecoord+" "+type+" "+value;
+   cmdline = "set "+ecoord+" "+type+" "+value;
+   editor.EditorScheduleSheetCommands(cmdline, true, false);  
+   
+   
+           if(ecoord)
+			         {		 
+						 setTimeout(function(){
+								if(sheetobj.Customcells)			
+									sheetobj.Customcells[ecoord]=sheetobj.cells[ecoord]; 
+							  SocialCalc.SpreadsheetControl.FindInSheet()
+							  editor = SocialCalc.GetSpreadsheetControlObject().editor;
+
+								editor.ScrollRelativeBoth(0,3)
+								editor.ScrollRelativeBoth(0,-3)
+							 },500)
+					}
 
    return;
 
    }
-
-
-// Eddy EditedTriggerCell {
-
-
-SocialCalc.EditedTriggerCell  = function(actionFormulaCells, editedCellRef, editor, sheet) {
- 
-	 for(var actionCellId in actionFormulaCells) {
-		 
-			var parameters = sheet.ioParameterList[actionCellId];
-            if(typeof parameters === 'undefined') continue;	
-			
-			switch(parameters.function_name) {
-				  case "EMAILONEDIT" :
-				  case "EMAILONEDITIF" :
-					  cmdline = "setemailparameters "+actionCellId+ " " + editedCellRef;
-					// hold off on commands until recalc done
-				      editor.deferredEmailCommands.push({cmdstr: cmdline, saveundo: false});
-//					  editor.EditorScheduleSheetCommands(cmdline, false, false);
-					  break;
-			}
-	 }
-	
-}	
-// } Eddy EditedTriggerCell
-
-
-
-
-
 
 //
 // SocialCalc.EditorApplySetCommandsToRange(editor, cmd)
@@ -2657,7 +2561,10 @@ SocialCalc.MoveECellWithKey = function(editor, ch) {
       }
 
    coord = editor.MoveECell(SocialCalc.crToCoord(col, row));
-
+	if(editor.context.sheetobj.cellsids[editor.ecell.row-1])
+	{
+		editor.ecell.coord=editor.customecell.coord=SocialCalc.crToCoord(editor.ecell.col,editor.context.sheetobj.cellsids[editor.ecell.row-1])
+	}
    if (editor.range.hasrange) {
       if (shifted)
          editor.RangeExtend();
@@ -2707,8 +2614,6 @@ SocialCalc.MoveECell = function(editor, newcell) {
    editor.ecell = SocialCalc.coordToCr(newcell);
    editor.ecell.coord = newcell;
    cell=SocialCalc.GetEditorCellElement(editor, editor.ecell.row, editor.ecell.col);
-   // eddy MoveECell {
-   // }
    highlights[newcell] = "cursor";
 
    for (f in editor.MoveECellCallback) { // let others know
@@ -2738,7 +2643,13 @@ SocialCalc.EnsureECellVisible = function(editor) {
 
    var vamount = 0;
    var hamount = 0;
-
+    var scrollbol=true;
+    
+    if(editor.customlastRow==editor.ecell.row)
+		scrollbol=false;	
+					
+					
+					
    if (editor.ecell.row > editor.lastnonscrollingrow) {
       if (editor.ecell.row < editor.firstscrollingrow) {
          vamount = editor.ecell.row - editor.firstscrollingrow - Math.floor((editor.lastvisiblerow - editor.firstscrollingrow)/2);
@@ -2756,13 +2667,12 @@ SocialCalc.EnsureECellVisible = function(editor) {
          }
       }
 
-   if (vamount!=0 || hamount!=0) {
+   if ((vamount!=0 && scrollbol) || hamount!=0) {
       editor.ScrollRelativeBoth(vamount, hamount);
       }
    else {
       editor.cellhandles.ShowCellHandles(true);
       }
-
    }
 
 SocialCalc.ReplaceCell = function(editor, cell, row, col) {
@@ -2801,9 +2711,6 @@ SocialCalc.UpdateCellCSS = function(editor, cell, row, col) {
 
 SocialCalc.SetECellHeaders = function(editor, selected) {
 
-   // eddy SetECellHeaders {
-   if(editor.context.showRCHeaders === false) return;
-   // } SetECellHeaders
    var ecell = editor.ecell;
    var context = editor.context;
 
@@ -2828,7 +2735,7 @@ SocialCalc.SetECellHeaders = function(editor, selected) {
       first = context.rowpanes[rowpane].first;
       last = context.rowpanes[rowpane].last;
       if (ecell.row >= first && ecell.row <= last) {
-         headercell = editor.fullgrid.childNodes[1].childNodes[2+rowindex+ecell.row-first].childNodes[0];
+         headercell = editor.fullgrid.childNodes[2].childNodes[2+rowindex+ecell.row-first].childNodes[0];
          if (headercell) {
             if (context.classnames) headercell.className=context.classnames[selected+"rowname"];
             if (context.explicitStyles) headercell.style.cssText=context.explicitStyles[selected+"rowname"];
@@ -3329,11 +3236,8 @@ SocialCalc.CalculateRowPositions = function(editor, panenum, positions, sizes) {
 
    var tbodyobj;
 
-   // eddy CalculateRowPositions {
-//   if (!context.showRCHeaders) throw("Needs showRCHeaders=true");
-   if (!context.showRCHeaders) return;
-   // } CalculateRowPositions
-   
+   if (!context.showRCHeaders) throw("Needs showRCHeaders=true");
+
    tbodyobj=editor.fullgrid.lastChild;
 
    // Calculate start of this pane as row in this table:
@@ -3368,10 +3272,7 @@ SocialCalc.CalculateColPositions = function(editor, panenum, positions, sizes) {
 
    var tbodyobj;
 
-   // eddy CalculateColPositions {
-   // if (!context.showRCHeaders) throw("Needs showRCHeaders=true");
-   if (!context.showRCHeaders) return;
-   // } CalculateColPositions
+   if (!context.showRCHeaders) throw("Needs showRCHeaders=true");
 
    tbodyobj=editor.fullgrid.lastChild;
 
@@ -3810,10 +3711,7 @@ SocialCalc.InputBoxDisplayCellContents = function(inputbox, coord) {
    var scc = SocialCalc.Constants;
 
    if (!inputbox) return;
-   if (!coord) {
-     if(!inputbox.editor.ecell) return; // not initilized yet
-     coord = inputbox.editor.ecell.coord;
-   }
+   if (!coord) coord = inputbox.editor.ecell.coord;
    var text = SocialCalc.GetCellContents(inputbox.editor.context.sheetobj, coord);
    if (text.indexOf("\n")!=-1) {
       text = scc.s_inputboxdisplaymultilinetext;
@@ -4536,8 +4434,12 @@ SocialCalc.CellHandlesMouseDown = function(e) {
       cellhandles.draghandle.attachEvent("onmousemove", SocialCalc.CellHandlesMouseMove);
       cellhandles.draghandle.attachEvent("onmouseup", SocialCalc.CellHandlesMouseUp);
       cellhandles.draghandle.attachEvent("onlosecapture", SocialCalc.CellHandlesMouseUp);
-     }
-   SocialCalc.StopPropagation(event);
+      }
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
 
    }
@@ -4682,8 +4584,14 @@ SocialCalc.CellHandlesMouseMove = function(e) {
    cellhandles.fillinghandle.style.display = "block";
 
    mouseinfo.mouselastcoord = result.coord;
-   SocialCalc.StopPropagation(event);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
    return;
+
    }
 
 SocialCalc.CellHandlesDragAutoRepeat = function(coord, direction) {
@@ -4899,12 +4807,27 @@ SocialCalc.CellHandlesMouseUp = function(e) {
          break;
 
       }
-    SocialCalc.RemoveMouseMoveUp(SocialCalc.CellHandlesMouseMove,
-				    SocialCalc.CellHandlesMouseUp,
-				    cellhandles.draghandle,
-				    event);
+
+   if (event.stopPropagation) event.stopPropagation(); // DOM Level 2
+   else event.cancelBubble = true; // IE 5+
+   if (event.preventDefault) event.preventDefault(); // DOM Level 2
+   else event.returnValue = false; // IE 5+
+
+   if (document.removeEventListener) { // DOM Level 2
+      document.removeEventListener("mousemove", SocialCalc.CellHandlesMouseMove, true);
+      document.removeEventListener("mouseup", SocialCalc.CellHandlesMouseUp, true);
+      }
+   else if (cellhandles.draghandle.detachEvent) { // IE
+      cellhandles.draghandle.detachEvent("onlosecapture", SocialCalc.CellHandlesMouseUp);
+      cellhandles.draghandle.detachEvent("onmouseup", SocialCalc.CellHandlesMouseUp);
+      cellhandles.draghandle.detachEvent("onmousemove", SocialCalc.CellHandlesMouseMove);
+      cellhandles.draghandle.releaseCapture();
+      }
+
    mouseinfo.editor = null;
+
    return false;
+
    }
 
 // *************************************
@@ -5706,10 +5629,23 @@ SocialCalc.DragMouseDown = function(event) {
    draginfo.offsetY = 0;
 
    dobj.element.style.zIndex = "100";
-   SocialCalc.SetMouseMoveUp(SocialCalc.DragMouseMove,
-			     SocialCalc.DragMouseUp,
-			     dobj.element,
-			     e);
+
+   // Event code from JavaScript, Flanagan, 5th Edition, pg. 422
+   if (document.addEventListener) { // DOM Level 2 -- Firefox, et al
+      document.addEventListener("mousemove", SocialCalc.DragMouseMove, true); // capture everywhere
+      document.addEventListener("mouseup", SocialCalc.DragMouseUp, true);
+      }
+   else if (dobj.element.attachEvent) { // IE 5+
+      dobj.element.setCapture();
+      dobj.element.attachEvent("onmousemove", SocialCalc.DragMouseMove);
+      dobj.element.attachEvent("onmouseup", SocialCalc.DragMouseUp);
+      dobj.element.attachEvent("onlosecapture", SocialCalc.DragMouseUp);
+      }
+   if (e.stopPropagation) e.stopPropagation(); // DOM Level 2
+   else e.cancelBubble = true; // IE 5+
+   if (e.preventDefault) e.preventDefault(); // DOM Level 2
+   else e.returnValue = false; // IE 5+
+
    if (dobj && dobj.functionobj && dobj.functionobj.MouseDown) dobj.functionobj.MouseDown(e, draginfo, dobj);
 
    return false;
@@ -5729,9 +5665,14 @@ SocialCalc.DragMouseMove = function(event) {
 
    draginfo.clientX = e.clientX - draginfo.relativeOffset.left;
    draginfo.clientY = e.clientY - draginfo.relativeOffset.top;
-   SocialCalc.StopPropagation(e);
+
+   if (e.stopPropagation) e.stopPropagation(); // DOM Level 2
+   else e.cancelBubble = true; // IE 5+
+
    if (dobj && dobj.functionobj && dobj.functionobj.MouseMove) dobj.functionobj.MouseMove(e, draginfo, dobj);
+
    return false;
+
    }
 
 //
@@ -5751,11 +5692,28 @@ SocialCalc.DragMouseUp = function(event) {
    dobj.element.style.zIndex = draginfo.startZ;
 
    if (dobj && dobj.functionobj && dobj.functionobj.MouseUp) dobj.functionobj.MouseUp(e, draginfo, dobj);
-   SocialCalc.RemoveMouseMoveUp(SocialCalc.DragMouseMove,
-				SocialCalc.DragMouseUp,
-				dobj.element, e);
+
+   if (e.stopPropagation) e.stopPropagation(); // DOM Level 2
+   else e.cancelBubble = true; // IE 5+
+
+   if (document.removeEventListener) { // DOM Level 2
+      document.removeEventListener("mousemove", SocialCalc.DragMouseMove, true);
+      document.removeEventListener("mouseup", SocialCalc.DragMouseUp, true);
+      // Note: In old (1.5?) versions of Firefox, this causes the browser to skip the MouseUp for
+      // the button code. https://bugzilla.mozilla.org/show_bug.cgi?id=174320
+      // Firefox 1.5 is <1% share (http://marketshare.hitslink.com/report.aspx?qprid=7)
+      }
+   else if (dobj.element.detachEvent) { // IE
+      dobj.element.detachEvent("onlosecapture", SocialCalc.DragMouseUp);
+      dobj.element.detachEvent("onmouseup", SocialCalc.DragMouseUp);
+      dobj.element.detachEvent("onmousemove", SocialCalc.DragMouseMove);
+      dobj.element.releaseCapture();
+      }
+
    draginfo.draggingElement = null;
+
    return false;
+
    }
 
 //
@@ -6056,6 +6014,7 @@ SocialCalc.ButtonRegister = function(editor, element, paramobj, functionobj) {
       }
 
    return;
+
    }
 
 //
@@ -6163,7 +6122,11 @@ SocialCalc.ButtonMouseDown = function(event) {
       bobj.element.attachEvent("onmouseup", SocialCalc.ButtonMouseUp);
       bobj.element.attachEvent("onlosecapture", SocialCalc.ButtonMouseUp);
       }
-   SocialCalc.StopPropagation(e);
+   if (e.stopPropagation) e.stopPropagation(); // DOM Level 2
+   else e.cancelBubble = true; // IE 5+
+   if (e.preventDefault) e.preventDefault(); // DOM Level 2
+   else e.returnValue = false; // IE 5+
+
    buttoninfo.relativeOffset = SocialCalc.GetElementPositionWithScroll(bobj.editor.toplevel);
    buttoninfo.clientX = e.clientX - buttoninfo.relativeOffset.left;
    buttoninfo.clientY = e.clientY - buttoninfo.relativeOffset.top;
@@ -6195,7 +6158,12 @@ SocialCalc.ButtonMouseUp = function(event) {
       }
 
    if (!buttoninfo.buttonDown) return; // already did this (e.g., in IE, releaseCapture fires losecapture)
-   SocialCalc.StopPropagation(e);
+
+   if (e.stopPropagation) e.stopPropagation(); // DOM Level 2
+   else e.cancelBubble = true; // IE 5+
+   if (e.preventDefault) e.preventDefault(); // DOM Level 2
+   else e.returnValue = false; // IE 5+
+
    if (document.removeEventListener) { // DOM Level 2
       document.removeEventListener("mouseup", SocialCalc.ButtonMouseUp, true);
       }
@@ -6408,21 +6376,22 @@ SocialCalc.Keyboard = {
    };
 
 SocialCalc.KeyboardSetFocus = function(editor) {
+		if(!$(editor.target).is('.searchbarinput') && !$(editor.target).is('th')){
+			SocialCalc.Keyboard.focusTable = editor;
 
-   SocialCalc.Keyboard.focusTable = editor;
-
-   if (!SocialCalc.Keyboard.areListener) {
-      document.onkeydown = SocialCalc.ProcessKeyDown;
-      document.onkeypress = SocialCalc.ProcessKeyPress;
-      SocialCalc.Keyboard.areListener = true;
-      }
-   if (SocialCalc.Keyboard.passThru) {
-      if (SocialCalc.Keyboard.passThru.blur) {
-         SocialCalc.Keyboard.passThru.blur();
-         }
-      SocialCalc.Keyboard.passThru = null;
-      }
-   window.focus();
+		   if (!SocialCalc.Keyboard.areListener) {
+			  document.onkeydown = SocialCalc.ProcessKeyDown;
+			  document.onkeypress = SocialCalc.ProcessKeyPress;
+			  SocialCalc.Keyboard.areListener = true;
+			  }
+		   if (SocialCalc.Keyboard.passThru) {
+			  if (SocialCalc.Keyboard.passThru.blur) {
+				 SocialCalc.Keyboard.passThru.blur();
+				 }
+			  SocialCalc.Keyboard.passThru = null;
+			  }
+			window.focus();
+		}
    }
 
 SocialCalc.KeyboardFocus = function() {
@@ -6580,9 +6549,19 @@ SocialCalc.ProcessKeyPress = function(e) {
 //
 
 SocialCalc.ProcessKey = function (ch, e) {
+
    var ft = SocialCalc.Keyboard.focusTable;
+
    if (!ft) return true; // we're not handling it -- let browser do default
-   return ft.EditorProcessKey(ch, e);
+	//Added  for filter functionality
+	if($(e.explicitOriginalTarget).attr("class")!="searchbarinput"){
+		return ft.EditorProcessKey(ch, e);
+	}
+	else
+	{			  
+		return  !0
+	}
+
    }
 
 

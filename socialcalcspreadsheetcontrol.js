@@ -199,10 +199,6 @@ SocialCalc.SpreadsheetControl = function(idPrefix) {
 
    // Initialization Code:
 
-   // eddy Initialization {
-   if(typeof SocialCalc.debug_log === 'undefined') SocialCalc.debug_log = [];   
-   // }   
-   
    this.sheet = new SocialCalc.Sheet();
    this.context = new SocialCalc.RenderContext(this.sheet);
    this.context.showGrid=true;
@@ -770,42 +766,6 @@ SocialCalc.SpreadsheetControl = function(idPrefix) {
                   str += SocialCalc.special_chars(stack[i].command[j]) + "<br>";
                   }
                }
-			// --------------------------------------------   
- 		    // eddy log {
-
-			// --------------------------------------------   
-			var ObjToSource = function(o){
-				if (typeof(o) == "string") return o;
-				if (!o) return 'null';
-				if (typeof(o) == "object") {
-					if (!ObjToSource.check) ObjToSource.check = new Array();
-					for (var i=0, k=ObjToSource.check.length ; i<k ; ++i) {
-						if (ObjToSource.check[i] == o) {return '{}';}
-					}
-					ObjToSource.check.push(o);
-				}
-				var k="",na=typeof(o.length)=="undefined"?1:0,str="";
-				for(var p in o){
-					if (na) k = "'"+p+ "':";
-					if (typeof o[p] == "string") str += k + "'" + o[p]+"',";
-					else if (typeof o[p] == "object") str += k + ObjToSource(o[p])+",";
-					else str += k + o[p] + ",";
-				}
-				if (typeof(o) == "object") ObjToSource.check.pop();
-				if (na) return "{"+str.slice(0,-1)+"}";
-				else return "["+str.slice(0,-1)+"]";
-			}
-			
-			// --------------------------------------------   
-			
-		    if(typeof SocialCalc.debug_log != 'undefined') {
-				for(var index in SocialCalc.debug_log) { 
-					str += ObjToSource(SocialCalc.debug_log[index]) + "<br>";
-				}
-			}
-		    // }   
-			// --------------------------------------------   
-			   
             s.views.audit.element.innerHTML = str+"</td></tr></table>";
             SocialCalc.CmdGotFocus(true);
             },
@@ -906,7 +866,6 @@ SocialCalc.SpreadsheetControl = function(idPrefix) {
 
    }
 
-   
 // Methods:
 
 SocialCalc.SpreadsheetControl.prototype.InitializeSpreadsheetControl =
@@ -1069,7 +1028,7 @@ spreadsheet.Buttons = {
    spreadsheet.formulabarDiv.innerHTML = '<input type="text" size="60" value="">&nbsp;'; //'<textarea rows="4" cols="60" style="z-index:5;background-color:white;position:relative;"></textarea>&nbsp;';
    spreadsheet.spreadsheetDiv.appendChild(spreadsheet.formulabarDiv);
    var inputbox = new SocialCalc.InputBox(spreadsheet.formulabarDiv.firstChild, spreadsheet.editor);
-   
+
    for (button in spreadsheet.formulabuttons) {
       bele = document.createElement("img");
       bele.id = spreadsheet.idPrefix+button;
@@ -1106,6 +1065,107 @@ spreadsheet.Buttons = {
          {MouseDown: spreadsheet.findbuttons[button].command, Disabled: function() {return false;}});
       searchBar[0].appendChild(bele);
    } 
+   
+   /*
+    * Added for filter functionality
+    * 
+    $(document).on("blur",".searchbarinput",function(){
+				
+							curr_obj=$(this);			
+								var curr_obj_id=curr_obj.attr("id");
+								var spreadsheeObj = SocialCalc.GetSpreadsheetControlObject();				
+								var filters =(spreadsheeObj.sheet.filtertext)? JSON.parse(spreadsheeObj.sheet.filtertext):{};
+								if(curr_obj.val()!="")
+								{
+									filters[curr_obj_id]=curr_obj.val();
+								}
+								else
+								delete filters[curr_obj_id];
+								spreadsheeObj.sheet.filtertext=JSON.stringify(filters);
+							//Added for scroll one row on 27-01-2016
+								spreadsheeObj.editor.ScrollRelativeBoth(0,1)
+								spreadsheeObj.editor.ScrollRelativeBoth(0,-1)
+								SocialCalc.SpreadsheetControl.FindInSheet();				
+	})   */
+		
+    new_custom_sheet = SocialCalc.GetSpreadsheetControlObject();
+     $(document).on("keyup", ".searchbarinput", function(e) {
+		 
+		var code = e.keyCode || e.which;
+	//	console.warn(code);
+		if(code == 13) {
+			
+				curr_obj=$(this);			
+				var curr_obj_id=curr_obj.attr("id");
+				var spreadsheeObj = SocialCalc.GetSpreadsheetControlObject();				
+				var filters =(spreadsheeObj.sheet.filtertext)? JSON.parse(spreadsheeObj.sheet.filtertext):{};
+				if(curr_obj.val()!="")
+				{
+					filters[curr_obj_id]=curr_obj.val();
+				}
+				else
+				delete filters[curr_obj_id];
+				spreadsheeObj.sheet.filtertext=JSON.stringify(filters);
+				//Added for scroll one row on 27-01-2016
+				spreadsheeObj.editor.ScrollRelativeBoth(0,1)
+				spreadsheeObj.editor.ScrollRelativeBoth(0,-1)
+				SocialCalc.SpreadsheetControl.FindInSheet();				
+			
+		}
+		else
+		{			
+			 key_val=$(this).parent().attr("id").replace("searchcol_", ""); 
+			 id_val=$(this).attr("id");
+			 width_val=$(this).parent().width() ;
+			//console.warn(width_val)
+			dyna_div=$("<div  class='custom_auto_complete'  style='position:fixed;'/>");
+			dyna_div.css("width",width_val);
+			$(".custom_auto_complete").remove();
+			search_content=$(this).val();
+			searched_results = $(new_custom_sheet.sheet.filtersList[key_val]).filter(function(){
+			
+					return (this.toString().search(search_content) >= 0)
+			})  	
+			
+			filter_array=$( searched_results).slice( 0,9 );
+			dyna_ul=$("<ul>");
+			dyna_ul.append($("<li class='get_search' value=''>&nbsp;</li>"));
+			$.each( filter_array, function( key, value ) {
+				dyna_ul.append($("<li class='get_search' value="+key+">"+value+"</li>"));
+			});
+			dyna_div.append(dyna_ul);
+			$(this).parent().append(dyna_div);		
+		}
+     
+	});
+	
+
+	$(document).click(function(event) {
+		if ( !$(event.target).hasClass('get_search')) {
+			$(".custom_auto_complete").remove();
+		}
+	});
+	
+    $(document).on("click", ".get_search", function() {		
+            curr_obj =$(this).parents(".filtersRow").find("input"); 
+            curr_obj.val($(this).text().trim())
+            if($(this).text()==" ")
+				curr_obj.val("");           
+			var curr_obj_id=curr_obj.attr("id");
+			var spreadsheeObj = SocialCalc.GetSpreadsheetControlObject();				
+			var filters =(spreadsheeObj.sheet.filtertext)? JSON.parse(spreadsheeObj.sheet.filtertext):{};
+			if(curr_obj.val()!="")
+			{
+				filters[curr_obj_id]=curr_obj.val();
+			}
+			else
+			delete filters[curr_obj_id];
+			spreadsheeObj.sheet.filtertext=JSON.stringify(filters);
+			//Added for scroll one row on 27-01-2016
+			spreadsheeObj.editor.ScrollRelativeBoth(0,1)
+			spreadsheeObj.editor.ScrollRelativeBoth(0,-1)
+			SocialCalc.SpreadsheetControl.FindInSheet();		
+	});
    input.on('input', SocialCalc.SpreadsheetControl.FindInSheet);
    input.on('focus', function() {
         SocialCalc.Keyboard.passThru = true;
@@ -1135,37 +1195,14 @@ spreadsheet.Buttons = {
 
    // create sheet view and others
 
-   // InitializeSpreadsheetControl eddy {
-   SocialCalc.CalculateSheetNonViewHeight(spreadsheet);
-   // } InitializeSpreadsheetControl
+   spreadsheet.nonviewheight = spreadsheet.statuslineheight +
+      spreadsheet.spreadsheetDiv.firstChild.offsetHeight +
+      spreadsheet.spreadsheetDiv.lastChild.offsetHeight;
    spreadsheet.viewheight = spreadsheet.height-spreadsheet.nonviewheight;
    spreadsheet.editorDiv=spreadsheet.editor.CreateTableEditor(spreadsheet.width, spreadsheet.viewheight);
 
-// eddy test add input 
-   var appViewDiv = document.createElement("div");
-   appViewDiv.id = "te_appView";
-   
-   appViewDiv.appendChild(spreadsheet.editorDiv)
-   spreadsheet.editorDiv = appViewDiv;
-
-   var formDataDiv = document.createElement("div");
-   formDataDiv.id = "te_formData";
-   //formDataDiv.style.visibility = "hidden";
-   formDataDiv.style.display = "none";
-   //formDataDiv.style.display = "inline";
-   
-  // spreadsheet.spreadsheetDiv.appendChild(formDataDiv);   
-   spreadsheet.editorDiv.appendChild(formDataDiv);
-       
-// }
-      
    spreadsheet.spreadsheetDiv.appendChild(spreadsheet.editorDiv);
 
-// eddy test add input 
-   spreadsheet.formDataViewer = new SocialCalc.SpreadsheetViewer("te_FormData-"); // should end with -
-   spreadsheet.formDataViewer.InitializeSpreadsheetViewer(formDataDiv.id, 180, 0, 200);
-// end
-   
    for (vname in views) {
       html = views[vname].html;
       for (style in views[vname].replacements) {
@@ -1223,20 +1260,6 @@ spreadsheet.Buttons = {
    return;
 
    }
-
-
-// eddy CalculateSheetNonViewHeight {
-SocialCalc.CalculateSheetNonViewHeight = function(spreadsheet) {
-  spreadsheet.nonviewheight = spreadsheet.statuslineheight;
-  for(var nodeIndex = 0;  nodeIndex < spreadsheet.spreadsheetDiv.childNodes.length;  nodeIndex++ ) {
-    if(spreadsheet.spreadsheetDiv.childNodes[nodeIndex].id == "SocialCalc-statusline") continue;
-    spreadsheet.nonviewheight += spreadsheet.spreadsheetDiv.childNodes[nodeIndex].offsetHeight;
-  }
-  
-}
-
-// }
-
 
 //
 // outstr = SocialCalc.LocalizeString(str)
@@ -1715,6 +1738,7 @@ SocialCalc.DoCmd = function(obj, which) {
                 var cells = spreadsheet.sheet.cells; 
                 var min_col = -1, max_col = -1, min_row = -1, max_row = -1;
                 for (var cell_id in cells) {
+                    cell = cells[cell_id];
                     var cr = SocialCalc.coordToCr(cell_id);
                     if (min_row == -1 || cr.row < min_row) {
                         min_row = cr.row;
@@ -2810,17 +2834,22 @@ SocialCalc.SpreadsheetControl.DoSum = function() {
 SocialCalc.SpreadsheetControl.FindInSheet = function() {
     var searchstatus = $("#searchstatus");
     var spreadsheet = SocialCalc.GetSpreadsheetControlObject();
-    if (!this.value.length) {
-        searchstatus.text("");
+
         spreadsheet.sheet.search_cells = [];
         spreadsheet.sheet.selected_search_cell = undefined;
-        return;
-    }
-    var cells = spreadsheet.sheet.cells;
+    var filtersrows= (spreadsheet.sheet.filtertext)? JSON.parse(spreadsheet.sheet.filtertext):[];
+    spreadsheet.sheet.Customcells=(spreadsheet.sheet.Customcells)?spreadsheet.sheet.Customcells:spreadsheet.sheet.cells;
+    //var cells = spreadsheet.sheet.cells;
+    var cells = spreadsheet.sheet.Customcells;
     var regex = new RegExp(this.value, 'im');
     var cell, cellvalue;
     var search_cells = [];
-    for (var cell_id in cells) {
+    searchedrow = {};
+	 searchedIds= [];
+    var rows=[];
+    var  tmp_array=[];      
+    
+  /*  for (var cell_id in cells) {
         cell = cells[cell_id];
         var cr = SocialCalc.coordToCr(cell_id);
         if (spreadsheet.sheet.rowattribs.hide[cr.row] === 'yes' || spreadsheet.sheet.colattribs.hide[SocialCalc.rcColname(cr.col)] === 'yes') {
@@ -2834,23 +2863,83 @@ SocialCalc.SpreadsheetControl.FindInSheet = function() {
         if (cellvalue !== undefined && cellvalue.match(regex)) {
            search_cells.push(cell_id);
         } 
-    }
+    }*/
+    for (var cell_id in cells) {
+    
+    	 var cell_id_val = SocialCalc.coordToCr(cell_id);	
+			 tmp_array=(rows[cell_id_val.row])?rows[cell_id_val.row]:[];
+			 tmp_array.push(cell_id)
+			 tmp_array.sort(); 
+			 rows[cell_id_val.row]=tmp_array;    
+	}
+	rows = rows.filter(Boolean);
+	$.each(rows, function(index, eachrow) {
+		
+            var flag = 1; //0 for no value, 1 for true,2 for false
+            var RowNum = SocialCalc.coordToCr(eachrow[0]);
+            $.each(filtersrows, function(elementindex, value) {
+                cell_id = elementindex + RowNum.row;
+                cell = cells[cell_id];
+                if (cell) {
+					
+					
+					    var cr = SocialCalc.coordToCr(cell_id);
+					    regex= new RegExp(filtersrows[SocialCalc.rcColname(cr.col)], "im");
+						if (!(spreadsheet.sheet.rowattribs.hide[cr.row] !== 'yes' && spreadsheet.sheet.colattribs.hide[SocialCalc.rcColname(cr.col)] !== 'yes' && (cellvalue =(cell.datatype === 'c')?cell.displaystring:  String(cell.datavalue))&&cellvalue.match(regex) )) {
+								flag = 0;
+						}
+					
+              
+                } else {
+                    flag = 0;
+                }
+
+            });
+            if (flag == 1) {
+                search_cells.push(eachrow[0]);
+
+            } else {
+                delete rows[index];
+            }
+				
+	
+	});
+    rows = rows.filter(Boolean);
+    	$.each(rows, function( index, element_arr ) {
+			$.each(element_arr, function( ele_index, elemet ) {
+					tmp_ele=cells[elemet];
+					tmp_idx=index+1;
+					
+					var c = SocialCalc.coordToCr(elemet);	
+						searchedIds.push(c.row);
+					col_val=	SocialCalc.rcColname(c.col);
+					searchedrow[elemet]= cells[elemet];
+			
+			})
+			spreadsheet.editor.customlastRow=index+1;
+		});
+    spreadsheet.sheet.cellsids=$.unique( searchedIds),
+    spreadsheet.sheet.cells=searchedrow;
+    //fixed issue :   getting issue in selected cell is not in first page then  filter not working On 29-01-2016
+   spreadsheet.editor.ecell.row=1;
+    
     spreadsheet.sheet.search_cells = search_cells;
     if (search_cells.length) {
         spreadsheet.sheet.selected_search_cell = 0;
-        spreadsheet.editor.MoveECell(search_cells[0]);
+       // spreadsheet.editor.MoveECell(search_cells[0]);
+        spreadsheet.editor.MoveECell(searchedrow[0]);
         searchstatus.text("1 of " + search_cells.length); 
     } else {
         spreadsheet.sheet.selected_search_cell = undefined;
         searchstatus.text("No Matches");
     }
-        
 }
 
 SocialCalc.SpreadsheetControl.SearchSheet = function(direction) {
     var spreadsheet = SocialCalc.GetSpreadsheetControlObject();
     var sheet = spreadsheet.sheet;
-    var cells = sheet.search_cells;
+    //var cells = sheet.search_cells;
+    var cells =  (sheet.search_cells)?sheet.search_cells:[];
     if (!cells.length) {
         return;
     }

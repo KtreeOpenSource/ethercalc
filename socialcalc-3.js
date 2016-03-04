@@ -27,7 +27,7 @@
 // JavaScript version of the code, not the SocialCalc Perl code.
 //
 */
- 
+
 /*
 
 **** Overview ****
@@ -176,8 +176,6 @@ SocialCalc.Callbacks = {
 //    comment: cell comment string
 //
 
-// Eddy - SocialCalc.Cell
-
 SocialCalc.Cell = function(coord) {
 
    this.coord = coord;
@@ -313,35 +311,12 @@ SocialCalc.ResetSheet = function(sheet, reload) {
 
    sheet.sci = new SocialCalc.SheetCommandInfo(sheet);
 
-   sheet.ioEventTree ={};
-   sheet.ioParameterList = {}; 
-
    }
 
 // Methods:
 
 SocialCalc.Sheet.prototype.ResetSheet = function() {SocialCalc.ResetSheet(this);};
 SocialCalc.Sheet.prototype.AddCell = function(newcell) {return this.cells[newcell.coord]=newcell;};
-SocialCalc.Sheet.prototype.LastCol = function() { 
-    var last_col = 1;
-    for (var cell_id  in this.cells) {
-        var cr = SocialCalc.coordToCr(cell_id);
-        if (cr.col > last_col) {
-            last_col = cr.col;
-        }
-    }
-    return last_col;
-}
-SocialCalc.Sheet.prototype.LastRow = function() { 
-    var last_row = 1;
-    for (var cell_id  in this.cells) {
-        var cr = SocialCalc.coordToCr(cell_id);
-        if (cr.row > last_row) {
-            last_row = cr.row;
-        }
-    }
-    return last_row;
-} 
 SocialCalc.Sheet.prototype.GetAssuredCell = function(coord) {
    return this.cells[coord] || this.AddCell(new SocialCalc.Cell(coord));
    };
@@ -1690,19 +1665,13 @@ SocialCalc.SheetCommandsTimerRoutine = function(sci, parseobj, saveundo) {
 
    var errortext;
    var starttime = new Date();
+
    sci.timerobj = null;
 
    while (!parseobj.EOF()) { // go through all commands (separated by newlines)
 
       errortext = SocialCalc.ExecuteSheetCommand(sci.sheetobj, parseobj, saveundo);
-      // Error - Use  log on server   OR  alert on client 
-      if (errortext) {
-        if (typeof(alert) == "function")  {
-          alert(errortext);
-        } else {
-          console.log(errortext)
-        }
-      }
+      if (errortext) alert(errortext);
 
       parseobj.NextLine();
 
@@ -1757,7 +1726,6 @@ SocialCalc.SheetCommandsTimerRoutine = function(sci, parseobj, saveundo) {
 //    redisplay
 //    changedrendervalues
 //    startcmdextension extension rest-of-command
-//    sendemail ??? eddy ???
 //
 // If saveundo is true, then undo information is saved in sheet.changes.
 //
@@ -1798,6 +1766,7 @@ SocialCalc.ExecuteSheetCommand = function(sheet, cmd, saveundo) {
       }
 
    cmd1 = cmd.NextToken();
+
    switch (cmd1) {
 
       case "set":
@@ -3188,17 +3157,6 @@ SocialCalc.ExecuteSheetCommand = function(sheet, cmd, saveundo) {
             }
          break;
 
-         // eddy ExecuteSheetCommand {
-//      case "setemailparameters":    	  
-//    	  break;
-    	  
-      case "settimetrigger":    
-      case "sendemail":    
-      case "submitform":    
-    	  // email/form/timetrigger handled by server, so ignore here
-    	  break;
-         // } eddy ExecuteSheetCommand 
-    	  
       default:
          errortext = scc.s_escUnknownCmd+cmdstr;
          break;
@@ -3654,7 +3612,7 @@ SocialCalc.RecalcClearTimeout = function() {
 
    }
 
-  
+
 //
 // SocialCalc.RecalcLoadedSheet(sheetname, str, recalcneeded, live)
 //
@@ -3771,9 +3729,6 @@ SocialCalc.RecalcTimerRoutine = function() {
    coord = sheet.recalcdata.nextcalc;
    while (coord) {
       cell = sheet.cells[coord];
-	  // eddy RecalcTimerRoutine {
-	   cell.parseinfo.coord = coord;
-	  // }
       eresult = scf.evaluate_parsed_formula(cell.parseinfo, sheet, false);
       if (scf.SheetCache.waitingForLoading) { // wait until restarted
          recalcdata.nextcalc = coord; // start with this cell again
@@ -4384,6 +4339,7 @@ SocialCalc.RenderContext.prototype.InitializeTable = function(tableobj) {SocialC
 SocialCalc.RenderContext.prototype.RenderSheet = function(oldtable, linkstyle) {return SocialCalc.RenderSheet(this, oldtable, linkstyle);};
 SocialCalc.RenderContext.prototype.RenderColGroup = function() {return SocialCalc.RenderColGroup(this);};
 SocialCalc.RenderContext.prototype.RenderColHeaders = function() {return SocialCalc.RenderColHeaders(this);};
+SocialCalc.RenderContext.prototype.RenderFiltersRow = function() {return SocialCalc.RenderFiltersRow(this);};
 SocialCalc.RenderContext.prototype.RenderSizingRow = function() {return SocialCalc.RenderSizingRow(this);};
 SocialCalc.RenderContext.prototype.RenderRow = function(rownum, rowpane, linkstyle) {return SocialCalc.RenderRow(this, rownum, rowpane, linkstyle);};
 SocialCalc.RenderContext.prototype.RenderSpacingRow = function() {return SocialCalc.RenderSpacingRow(this);};
@@ -4585,7 +4541,14 @@ SocialCalc.RenderSheet = function(context, oldtable, linkstyle) {
 
    var newrow, rowpane;
    var tableobj, colgroupobj, tbodyobj, parentnode;
-
+ /* Added for filter functionality
+	  * =====================================
+	  *  */
+       sheetObj = context.sheetobj;
+       searchedCellsLists= sheetObj.search_cells;
+	 /*
+	  * ======================================
+	  * */
    // do precompute stuff if necessary
 
    if (context.sheetobj.changedrendervalues) {
@@ -4607,7 +4570,14 @@ SocialCalc.RenderSheet = function(context, oldtable, linkstyle) {
 
    tableobj=document.createElement("table");
    context.InitializeTable(tableobj);
-
+	/* Added for filter functionality
+	  * =====================================
+	  *  */
+	filteredRowObj= context.RenderFiltersRow();
+	tableobj.appendChild(filteredRowObj)
+	/*
+	  * ======================================
+	  * */
    colgroupobj=context.RenderColGroup();
    tableobj.appendChild(colgroupobj);
 
@@ -4621,14 +4591,59 @@ SocialCalc.RenderSheet = function(context, oldtable, linkstyle) {
       }
 
    for (rowpane=0; rowpane<context.rowpanes.length; rowpane++) {
-      for (rownum=context.rowpanes[rowpane].first;rownum<=context.rowpanes[rowpane].last;rownum++) {
-         newrow=context.RenderRow(rownum, rowpane, linkstyle);
-         tbodyobj.appendChild(newrow);
-         }
-      if (rowpane<context.rowpanes.length-1) {
-         newrow=context.RenderSpacingRow();
-         tbodyobj.appendChild(newrow);
-         }
+	   /* Added for filter functionality
+		* =====================================
+		*  */
+		row_array=[];
+		for (rownumer in searchedCellsLists) {
+			rownumerVal=parseInt(searchedCellsLists[rownumer].match(/\d+/)[0], 10); 
+			row_array.push(rownumerVal); 
+		}
+		searchfil=false;
+		if(sheetObj.filtertext&&sheetObj.filtertext.length>2)
+		{
+			searchfil=true;
+		}
+
+		var lastrow;
+		var firstrow;
+		firstrow = context.rowpanes[rowpane].first;
+		lastrow=context.rowpanes[rowpane].last;
+		if(!searchfil)
+		{
+			
+			for (rownum=context.rowpanes[rowpane].first;rownum<=context.rowpanes[rowpane].last;rownum++) {
+					newrow=context.RenderRow(rownum, rowpane, linkstyle);
+					tbodyobj.appendChild(newrow);
+			}
+			if (rowpane<context.rowpanes.length-1) {
+				newrow=context.RenderSpacingRow();
+				tbodyobj.appendChild(newrow);
+			}
+			
+		}
+		else
+		{
+			lastrownumber=row_array[row_array.length-1];
+			row_array = row_array.slice(firstrow-1, lastrow-1); 
+			for (rownumer in row_array) {
+				
+					newrow = context.RenderRow(row_array[rownumer], rowpane, linkstyle)
+					if(lastrownumber==row_array[rownumer])
+					{
+						newrow.className="lastfilterrow";						
+					}
+					tbodyobj.appendChild(newrow);
+			}
+			if (rowpane<context.rowpanes.length-1) {
+				newrow=context.RenderSpacingRow();
+				tbodyobj.appendChild(newrow);
+			}
+			
+		}
+		/*
+		* ======================================
+		* */
       }
 
    tableobj.appendChild(tbodyobj);
@@ -4816,17 +4831,113 @@ SocialCalc.RenderColHeaders = function(context) {
          result.appendChild(newcol);
          }
       }
-   // eddy {
-//   if(context.formColNames != null) {
-//     for(var nodeIndex = 0;  nodeIndex < result.childNodes.length;  nodeIndex++ ) {
-//       var currentCol = result.childNodes[nodeIndex];
-//       if(context.formColNames[currentCol.innerText] != null) currentCol.innerText = context.formColNames[currentCol.innerText];
-//     }
-//   }
-   // }
    return result;
    }
+SocialCalc.RenderFiltersRow = function(context) {
+    var t, o, sheetobj = context.sheetobj,
+    tableHeaderObj = document.createElement("thead");
+    tableRowObj = document.createElement("tr");
+     var column_list =(sheetobj.filtertext)? JSON.parse(sheetobj.filtertext):[];	
+     var filters_lists;
+     var cols={};
+	 var filtersList={};
+	 
+	 
 
+	if(JSON.stringify(column_list) !== '{}')	
+	{
+		sheet_vals=(sheetobj.Customcells)?sheetobj.Customcells:sheetobj.cells;
+		if(JSON.stringify(sheet_vals) !== '{}')	
+		{
+			for (var cellContent in sheet_vals) 
+			{
+				var cellObj = SocialCalc.coordToCr(cellContent);	
+				if(cellObj)
+				{
+					tmp_array=(cols[cellObj.col])?cols[cellObj.col]:[];
+					if(sheet_vals[cellContent])
+					{
+						tmp_array.push(sheet_vals[cellContent].datavalue);			
+							cols[cellObj.col]=tmp_array;
+					}
+					
+				}
+			
+			}
+			var newcol={};
+			$.each(cols, function( key, value ) {
+				 newcol=value.filter(Boolean);
+				newcol=$.unique(newcol);
+				cols[key]= newcol.sort();
+			});
+			sheetobj.filtersList =cols;
+		   
+		}
+		  
+	}
+	
+   newcol=document.createElement("th");
+   if (context.classnames) newcol.className=context.classnames.upperleft;
+   if (context.explicitStyles) newcol.style.cssText=context.explicitStyles.upperleft;
+   newcol.width=context.rownamewidth;
+   tableRowObj.appendChild(newcol);
+   
+	for (colpane=0; colpane<context.colpanes.length; colpane++) {
+		for (colnum=context.colpanes[colpane].first; colnum<=context.colpanes[colpane].last; colnum++) {	
+		
+
+		   newcol=document.createElement("th");
+         if (context.classnames) newcol.className=context.classnames.colname;
+         if (context.explicitStyles) newcol.style.cssText=context.explicitStyles.colname;
+
+         
+         // If neighbour is hidden, show an icon in this column.
+         if (colnum < context.colpanes[context.colpanes.length-1].last && sheetobj.colattribs.hide[SocialCalc.rcColname(colnum+1)] == "yes") {
+            var unhide = document.createElement("div");
+            if (context.classnames) unhide.className=context.classnames.unhideleft;
+            if (context.explicitStyles) unhide.style.cssText=context.explicitStyles.unhideleft;
+            context.colunhideleft[colnum] = unhide;
+            newcol.appendChild(unhide);
+         }
+         
+
+         tableRowObj.appendChild(newcol);
+         
+         
+             filtertxt= document.createElement("input");
+
+             filtertxt.style="width:90%";
+			 
+             if(column_list[SocialCalc.rcColname(colnum)])
+             filtertxt.value=column_list[SocialCalc.rcColname(colnum)];             
+             filtertxt.id=SocialCalc.rcColname(colnum);
+             filtertxt.className="searchbarinput";
+             newcol.appendChild(filtertxt)
+             
+             if (colnum > 1 && sheetobj.colattribs.hide[SocialCalc.rcColname(colnum-1)] == "yes") {
+					unhide = document.createElement("div");
+					if (context.classnames) unhide.className=context.classnames.unhideright;
+					if (context.explicitStyles) unhide.style.cssText=context.explicitStyles.unhideright;
+					context.colunhideright[colnum] = unhide;
+					newcol.appendChild(unhide);
+			}   
+            newcol.className = "filtersRow";
+			newcol.id="searchcol_"+colnum;
+        
+				tableRowObj.appendChild(newcol)
+        }
+        if (colpane<context.colpanes.length-1) {
+			 newcol=document.createElement("td");
+			 newcol.width=context.defaultpanedividerwidth;
+			 if (context.classnames.panedivider) newcol.className=context.classnames.panedivider;
+			 if (context.explicitStyles.panedivider) newcol.style.cssText=context.explicitStyles.panedivider;
+			 tableRowObj.appendChild(newcol);
+         }
+    }
+  tableHeaderObj.appendChild(tableRowObj);
+    
+    return tableHeaderObj;
+}
 SocialCalc.RenderColGroup = function(context) {
 
    var colpane, colnum, newcol, t;
@@ -4961,9 +5072,8 @@ SocialCalc.RenderCell = function(context, rownum, colnum, rowpane, colpane, noEl
    if (cell.displaystring==undefined) { // cache the display value
       cell.displaystring = SocialCalc.FormatValueForDisplay(sheetobj, cell.datavalue, coord, (linkstyle || context.defaultlinkstyle));
       }
-	
    result.innerHTML = cell.displaystring;
-	  
+
    num=cell.layout || sheetattribs.defaultlayout;
    if (num && typeof(context.layouts[num]) !== "undefined") {
       stylestr+=context.layouts[num]; // use precomputed layout with "*"'s filled in
@@ -5497,17 +5607,8 @@ SocialCalc.FormatValueForDisplay = function(sheetobj, value, cr, linkstyle) {
 
    valuetype = cell.valuetype || ""; // get type of value to determine formatting
    valuesubtype = valuetype.substring(1);
-   
-   // eddy setup display cell {
-   valueinputwidget = valuetype.charAt(1); 
-   var formula_name= valuetype.substring(2);
-   var html_display_value = null; 
-   var html_formated_value = null;
-   // }
-
    valuetype = valuetype.charAt(0);
-   
-   
+
    if (cell.errors || valuetype=="e") {
       displayvalue = cell.errors || valuesubtype || "Error in cell";
       return displayvalue;
@@ -5527,10 +5628,7 @@ SocialCalc.FormatValueForDisplay = function(sheetobj, value, cr, linkstyle) {
             }
          return displayvalue;
          }
-	  var html_display_value = displayvalue; // eddy
       displayvalue = SocialCalc.format_text_for_display(displayvalue, cell.valuetype, valueformat, sheetobj, linkstyle, cell.nontextvalueformat);
-	  var html_formated_value = displayvalue; // eddy
-	  
       }
 
    else if (valuetype=="n") {
@@ -5542,8 +5640,6 @@ SocialCalc.FormatValueForDisplay = function(sheetobj, value, cr, linkstyle) {
       if (valueformat==null || valueformat=="none") {
          valueformat = "";
          }
-		 
-		 
       if (valueformat=="formula") {
          if (cell.datatype=="f") {
             displayvalue = SocialCalc.special_chars("="+cell.formula) || "&nbsp;";
@@ -5568,44 +5664,19 @@ SocialCalc.FormatValueForDisplay = function(sheetobj, value, cr, linkstyle) {
             }
          return displayvalue;
          }
-		 
-	  var html_display_value = displayvalue; // eddy
+
       displayvalue = SocialCalc.format_number_for_display(displayvalue, cell.valuetype, valueformat);
-	  var html_formated_value = displayvalue; // eddy
 
       }
    else { // unknown type - probably blank
       displayvalue = "&nbsp;";
       }
 
-
-   // eddy display cell HTML {      
-   if(valueinputwidget=="i" && html_display_value!=null && html_formated_value!=null) {
-	 var formula_details = SocialCalc.Formula.FunctionList[formula_name]; 
-//	 var ecell = SocialCalc.GetSpreadsheetControlObject().editor.ecell; // check if widget has focus
-//	 SocialCalc.GetSpreadsheetControlObject().debug.push({formula_name:formula_name});
-		 if( formula_details) {
-			 var cell_html = formula_details[5];
-			 // var cell_html = "<button type='button' onclick=\"SocialCalc.TriggerIoAction('<%=cell_reference%>');\"><%=display_value%></button>";
-			 
-			 var checkedValue = (html_display_value == 0) ? "" : "checked"; // for checkbox
-			 cell_html = cell_html.replace(/<%=checked%>/g, checkedValue);
-			 cell_html = cell_html.replace(/<%=formated_value%>/g, html_formated_value);
-			 cell_html = cell_html.replace(/<%=display_value%>/g, html_display_value);
-			 return cell_html.replace(/<%=cell_reference%>/g, cr);
-			 }
-		 return "error:Widget HTML missing";
-	 }
-   // }
-	  
-	  
-	  
    return displayvalue;
 
    }
 
- 
-   
+
 //
 // displayvalue = format_text_for_display(rawvalue, valuetype, valueformat, sheetobj, linkstyle, nontextvalueformat)
 //
@@ -5789,10 +5860,10 @@ SocialCalc.DetermineValueType = function(rawvalue) {
       value = tvalue.replace(/[\$,]/g, "") - 0;
       type = "n$";
       }
-   else if (matches=value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{1,4})\s*$/)) { // MM-DD-YYYY, MM/DD/YYYY
+   else if (matches=value.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{1,4})\s*$/)) { // MM/DD/YYYY, MM/DD/YYYY
       year = matches[3] - 0;
       year = year < 1000 ? year + 2000 : year;
-      value = ((navigator.language).indexOf("fr") === 0)  ? (SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[2]-0, matches[1]-0)-2415019) : (SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[1]-0, matches[2]-0)-2415019);
+      value = SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[1]-0, matches[2]-0)-2415019;
       type = "nd";
       }
    else if (matches=value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\s*$/)) { // YYYY-MM-DD, YYYY/MM/DD
@@ -5801,33 +5872,6 @@ SocialCalc.DetermineValueType = function(rawvalue) {
       value = SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[2]-0, matches[3]-0)-2415019;
       type = "nd";
       }
-   else if (matches=value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2}) (\d{1,2}):(\d{1,2})\s*$/)) { // YYYY-MM-DD, YYYY/MM/DD HH:MM
-     // eddy added YYYY-MM-DD, YYYY/MM/DD HH:MM
-     year = matches[1]-0;
-     year = year < 1000 ? year + 2000 : year;
-     hour = matches[4]-0;
-     minute = matches[5]-0;
-     value = SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[2]-0, matches[3]-0)-2415019;
-     type = "nd";
-     if (hour < 24 && minute < 60) {
-       value += hour/24 + minute/(24*60);
-       type = "ndt";
-       }
-     }
-   else if (matches=value.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2}) (\d{1,2}):(\d{1,2}):(\d{1,2})\s*$/)) { // YYYY-MM-DD, YYYY/MM/DD HH:MM:SS
-     // eddy added YYYY-MM-DD, YYYY/MM/DD HH:MM:SS
-     year = matches[1]-0;
-     year = year < 1000 ? year + 2000 : year;
-     hour = matches[4]-0;
-     minute = matches[5]-0;
-     second = matches[6]-0;
-     value = SocialCalc.FormatNumber.convert_date_gregorian_to_julian(year, matches[2]-0, matches[3]-0)-2415019;
-     type = "nd";
-     if (hour < 24 && minute < 60 && second < 60) {
-       value += hour/24 + minute/(24*60) + second/(24*60*60);
-       type = "ndt";
-       }
-     }
    else if (matches=value.match(/^(\d{1,2}):(\d{1,2})\s*$/)) { // HH:MM
       hour = matches[1]-0;
       minute = matches[2]-0;
